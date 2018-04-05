@@ -1,5 +1,5 @@
 #import <Cocoa/Cocoa.h>
-#include "systray.h"
+#include "systray_darwin.h"
 
 @interface MenuItem : NSObject
 {
