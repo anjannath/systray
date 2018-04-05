@@ -8,7 +8,6 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
-	"fmt"
 	"crypto/md5"
 	"encoding/hex"
 	"path/filepath"
@@ -556,14 +555,14 @@ func (t *winTray) showMenu() error {
 	return nil
 }
 
-func nativeLoop() {
+func nativeLoop() error {
+	const WM_QUIT = 0x0012
 	if err := wt.initInstance(); err != nil {
-		fmt.Printf("initInstance failed: %s", err)
+		return err
 	}
 
 	if err := wt.createMenu(); err != nil {
-		fmt.Printf("createMenu failed: %s", err)
-		return
+		return err
 	}
 
 	defer func() {
@@ -586,12 +585,8 @@ func nativeLoop() {
 	}{}
 	for {
 		ret, _, err := pGetMessage.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
-		res := int32(ret)
-		if res == -1 {
-			log.Errorf("win32 GetMessage failed: %v", err)
-			return
-		} else if res == 0 { // WM_QUIT
-			break
+		if int32(ret) <= 0 {
+			return err
 		}
 		pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 		pDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
@@ -612,62 +607,43 @@ func quit() {
 // SetIcon sets the systray icon.
 // iconBytes should be the content of .ico for windows and .ico/.jpg/.png
 // for other platforms.
-func SetIcon(iconBytes []byte) {
+func SetIcon(iconBytes []byte) error {
 	bh := md5.Sum(iconBytes)
 	dataHash := hex.EncodeToString(bh[:])
 	iconFilePath := filepath.Join(os.TempDir(), "systray_temp_icon_"+dataHash)
 
 	if _, err := os.Stat(iconFilePath); os.IsNotExist(err) {
 		if err := ioutil.WriteFile(iconFilePath, iconBytes, 0644); err != nil {
-			log.Errorf("Unable to write icon data to temp file: %v", err)
-			return
+			return err
 		}
 	}
 
-	if err := wt.setIcon(iconFilePath); err != nil {
-		log.Errorf("Unable to set icon: %v", err)
-		return
-	}
+	return wt.setIcon(iconFilePath)
 }
 
 // SetTitle sets the systray title, only available on Mac.
-func SetTitle(title string) {
-	// do nothing
+func SetTitle(title string) error {
+	return nil
 }
 
 // SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
 // only available on Mac and Windows.
-func SetTooltip(tooltip string) {
-	if err := wt.setTooltip(tooltip); err != nil {
-		log.Errorf("Unable to set tooltip: %v", err)
-		return
-	}
+func SetTooltip(tooltip string) error {
+	return wt.setTooltip(tooltip)
 }
 
-func addOrUpdateMenuItem(item *MenuItem) {
-	err := wt.addOrUpdateMenuItem(item.id, item.title, item.disabled, item.checked)
-	if err != nil {
-		log.Errorf("Unable to addOrUpdateMenuItem: %v", err)
-		return
-	}
+func addOrUpdateMenuItem(item *MenuItem) error {
+	return wt.addOrUpdateMenuItem(item.id, item.title, item.disabled, item.checked)
 }
 
-func addSeparator(id int32) {
-	err := wt.addSeparatorMenuItem(id)
-	if err != nil {
-		log.Errorf("Unable to addSeparator: %v", err)
-		return
-	}
+func addSeparator(id int32) error {
+	return wt.addSeparatorMenuItem(id)
 }
 
-func hideMenuItem(item *MenuItem) {
-	err := wt.hideMenuItem(item.id)
-	if err != nil {
-		log.Errorf("Unable to hideMenuItem: %v", err)
-		return
-	}
+func hideMenuItem(item *MenuItem) error {
+	return wt.hideMenuItem(item.id)
 }
 
-func showMenuItem(item *MenuItem) {
-	addOrUpdateMenuItem(item)
+func showMenuItem(item *MenuItem) error {
+	return addOrUpdateMenuItem(item)
 }
