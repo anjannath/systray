@@ -1,6 +1,5 @@
 Package systray is a cross platfrom Go library to place an icon and menu in the notification area.
-Tested on Windows 8, Mac OSX, Ubuntu 14.10 and Debian 7.6.
-
+Tested on Windows XP,7,10 and Linux Mint 18.3.
 ## Usage
 ```go
 func main() {
@@ -30,18 +29,35 @@ sudo apt-get install libgtk-3-dev libappindicator3-dev
 ```
 Checked menu item not implemented on Linux yet.
 
-## Try
+Warning: GtkStatusIcon has been deprecated in GTK 3.14!
 
-Under `example` folder.
-Place tray icon under `icon`, and use `make_icon.bat` or `make_icon.sh`, whichever suit for your os, to convert the icon to byte array.
-Your icon should be .ico file under Windows, whereas .ico, .jpg and .png is supported on other platform.
 
+## Prepare icons
+
+You can use `filetobyte` utility at `cmd` folder. Two ways:
+1. Do
 ```sh
-go get
-go run main.go
+go get github.com/amkulikov/systray/cmd/filetobytes
 ```
+and after that use compiled binary directly, or use code generation in your project
+```
+//go:generate filetobytes -package=tray -dest=tray/data.go path/to/iconfile/or/iconsfolder
+```
+
+2. Use `go run` to execute util.
+```
+//go:generate go run github.com/amkulikov/systray/cmd/filetobytes/main.go -package=tray -dest=tray/data.go example/icon
+```
+
+It will generate file `data.go` in `tray` folder that will contain
+```
+var filesByteData = map[string][]byte{...}
+```
+where key is a path to sourcefile and value is a binary representation of resource.
+
 
 ## Credits
 
 - https://github.com/xilp/systray
 - https://github.com/cratonica/trayhost
+- https://github.com/getlantern/systray
