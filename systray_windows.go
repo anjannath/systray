@@ -618,7 +618,14 @@ func setIcon(iconBytes []byte) error {
 		}
 	}
 
-	return wt.setIcon(iconFilePath)
+	return setIconPath(iconFilePath)
+}
+
+// SetIcon sets the systray icon.
+// iconBytes should be the content of .ico for windows and .ico/.jpg/.png
+// for other platforms.
+func setIconPath(path string) error {
+	return wt.setIcon(path)
 }
 
 // SetTitle sets the systray title, only available on Mac.

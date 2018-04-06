@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sync"
 	"sync/atomic"
+	"os"
 )
 
 var (
@@ -169,6 +170,14 @@ func (item *MenuItem) update() error {
 // for other platforms.
 func SetIcon(iconBytes []byte) error {
 	return setIcon(iconBytes)
+}
+
+func SetIconPath(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+
+	return setIconPath(path)
 }
 
 // SetTitle sets the systray title, only available on Mac.

@@ -28,7 +28,7 @@ func quit() {
 // SetIcon sets the systray icon.
 // iconBytes should be the content of .ico for windows and .ico/.jpg/.png
 // for other platforms.
-func setIcon(iconBytes []byte) (err error) {
+func setIcon(iconBytes []byte) error {
 	bh := md5.Sum(iconBytes)
 	dataHash := hex.EncodeToString(bh[:])
 	iconFilePath := filepath.Join(os.TempDir(), "systray_temp_icon_"+dataHash)
@@ -39,8 +39,14 @@ func setIcon(iconBytes []byte) (err error) {
 		}
 	}
 
-	_, err = C.setIcon(C.CString(iconFilePath))
-	return
+	return setIconPath(iconFilePath)
+}
+
+// SetIcon sets the systray icon.
+// iconBytes should be the content of .ico for windows and .ico/.jpg/.png
+// for other platforms.
+func setIconPath(path string) error {
+	return C.setIcon(C.CString(path))
 }
 
 // SetTitle sets the systray title, only available on Mac.
