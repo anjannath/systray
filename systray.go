@@ -164,6 +164,24 @@ func (item *MenuItem) update() error {
 	return addOrUpdateMenuItem(item)
 }
 
+// SetIcon sets the systray icon.
+// iconBytes should be the content of .ico for windows and .ico/.jpg/.png
+// for other platforms.
+func SetIcon(iconBytes []byte) error {
+	return setIcon(iconBytes)
+}
+
+// SetTitle sets the systray title, only available on Mac.
+func SetTitle(title string) error {
+	return setTitle(title)
+}
+
+// SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
+// only available on Mac and Windows.
+func SetTooltip(tooltip string) error {
+	return setTooltip(tooltip)
+}
+
 func systrayMenuItemSelected(id int32) {
 	menuItemsLock.RLock()
 	item := menuItems[id]

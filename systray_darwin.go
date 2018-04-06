@@ -26,19 +26,19 @@ func quit() {
 // SetIcon sets the systray icon.
 // iconBytes should be the content of .ico for windows and .ico/.jpg/.png
 // for other platforms.
-func SetIcon(iconBytes []byte) {
+func setIcon(iconBytes []byte) {
 	cstr := (*C.char)(unsafe.Pointer(&iconBytes[0]))
 	C.setIcon(cstr, (C.int)(len(iconBytes)))
 }
 
 // SetTitle sets the systray title, only available on Mac.
-func SetTitle(title string) {
+func setTitle(title string) {
 	C.setTitle(C.CString(title))
 }
 
 // SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
 // only available on Mac and Windows.
-func SetTooltip(tooltip string) {
+func setTooltip(tooltip string) {
 	C.setTooltip(C.CString(tooltip))
 }
 
