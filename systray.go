@@ -1,6 +1,12 @@
 /*
-Package systray is a cross platfrom Go library to place an icon and menu in the
-notification area.
+Package systray is a cross-platform Go library to place an icon and menu in the
+notification area. Based on https://github.com/getlantern/systray and provides few improvements:
+
+	* Windows system calls instead of custom DLL
+	* Caching icon files
+	* Allows to set direct path to icon file
+	* Error handling
+
 Supports Windows, Mac OSX and Linux currently.
 Methods can be called from any goroutine except Run(), which should be called
 at the very beginning of main() to lock at main thread.
@@ -59,7 +65,7 @@ func Run(onReady func(), onExit func()) error {
 	}
 	systrayReady = onReady
 
-	// unlike onReady, onExit runs in the event loop to make sure it has time to
+	// onExit runs in the event loop to make sure it has time to
 	// finish before the process terminates
 	if onExit == nil {
 		onExit = func() {}
@@ -90,68 +96,68 @@ func AddMenuItem(title string, tooltip string) (*MenuItem, error) {
 	return item, item.update()
 }
 
-// AddSeparator adds a separator bar to the menu
+// AddSeparator adds a separator bar to the menu.
 func AddSeparator() error {
 	return addSeparator(atomic.AddInt32(&currentID, 1))
 }
 
-// SetTitle set the text to display on a menu item
+// SetTitle set the text to display on a menu item.
 func (item *MenuItem) SetTitle(title string) error {
 	item.title = title
 	return item.update()
 }
 
-// SetTooltip set the tooltip to show when mouse hover
+// SetTooltip set the tooltip to show when mouse hover.
 func (item *MenuItem) SetTooltip(tooltip string) error {
 	item.tooltip = tooltip
 	return item.update()
 }
 
-// Disabled checkes if the menu item is disabled
+// Disabled checkes if the menu item is disabled.
 func (item *MenuItem) Disabled() bool {
 	return item.disabled
 }
 
-// Enable a menu item regardless if it's previously enabled or not
+// Enable a menu item regardless if it's previously enabled or not.
 func (item *MenuItem) Enable() error {
 	item.disabled = false
 	return item.update()
 }
 
-// Disable a menu item regardless if it's previously disabled or not
+// Disable a menu item regardless if it's previously disabled or not.
 func (item *MenuItem) Disable() error {
 	item.disabled = true
 	return item.update()
 }
 
-// Hide hides a menu item
+// Hide hides a menu item.
 func (item *MenuItem) Hide() error {
 	return hideMenuItem(item)
 }
 
-// Show shows a previously hidden menu item
+// Show shows a previously hidden menu item.
 func (item *MenuItem) Show() error {
 	return showMenuItem(item)
 }
 
-// Checked returns if the menu item has a check mark
+// Checked returns if the menu item has a check mark.
 func (item *MenuItem) Checked() bool {
 	return item.checked
 }
 
-// Check a menu item regardless if it's previously checked or not
+// Check a menu item regardless if it's previously checked or not.
 func (item *MenuItem) Check() error {
 	item.checked = true
 	return item.update()
 }
 
-// Uncheck a menu item regardless if it's previously unchecked or not
+// Uncheck a menu item regardless if it's previously unchecked or not.
 func (item *MenuItem) Uncheck() error {
 	item.checked = false
 	return item.update()
 }
 
-// update propogates changes on a menu item to systray
+// update propogates changes on a menu item to systray.
 func (item *MenuItem) update() error {
 	menuItemsLock.Lock()
 	defer menuItemsLock.Unlock()
@@ -160,12 +166,15 @@ func (item *MenuItem) update() error {
 }
 
 // SetIcon sets the systray icon.
-// iconBytes should be the content of .ico for windows and .ico/.jpg/.png
+// iconBytes should be the content of *.ico for windows and *.ico/*.jpg/*.png
 // for other platforms.
+// On windows and linux it creates reusable temporary file with icon content. This file
 func SetIcon(iconBytes []byte) error {
 	return setIcon(iconBytes)
 }
 
+// SetIconPath sets icon by direct path.
+// It should be *.ico for windows and *.ico/*.jpg/*.png for other platforms.
 func SetIconPath(path string) error {
 	if _, err := os.Stat(path); err != nil {
 		return err
