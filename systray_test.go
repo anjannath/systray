@@ -1,7 +1,6 @@
 package systray
 
 import (
-	"io/ioutil"
 	"log"
 	"testing"
 	"time"
@@ -9,11 +8,7 @@ import (
 
 func TestRun(t *testing.T) {
 	onReady := func() {
-		b, err := ioutil.ReadFile("example/icon/iconwin.ico")
-		if err != nil {
-			t.Fatal("Icon not found")
-		}
-		if err := SetIcon(b); err != nil {
+		if err := SetIconPath("example/icon/iconwin.ico"); err != nil {
 			t.Fatalf("Can't set icon: %s", err)
 		}
 		if err := SetTitle("Test title с кириллицей"); err != nil {
@@ -47,11 +42,7 @@ func TestRun(t *testing.T) {
 
 func ExampleRun() {
 	onReady := func() {
-		b, err := ioutil.ReadFile("example/icon/iconwin.ico")
-		if err != nil {
-			log.Fatal("Icon not found")
-		}
-		if err := SetIcon(b); err != nil {
+		if err := SetIconPath("example/icon/iconwin.ico"); err != nil {
 			log.Fatalf("Can't set icon: %s", err)
 		}
 		if err := SetTitle("Test title с кириллицей"); err != nil {
