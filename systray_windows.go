@@ -42,35 +42,36 @@ const (
 )
 
 var (
-	k32                  = windows.NewLazySystemDLL("Kernel32.dll")
-	s32                  = windows.NewLazySystemDLL("Shell32.dll")
-	u32                  = windows.NewLazySystemDLL("User32.dll")
-	pGetModuleHandle     = k32.NewProc("GetModuleHandleW")
-	pShellNotifyIcon     = s32.NewProc("Shell_NotifyIconW")
-	pCreatePopupMenu     = u32.NewProc("CreatePopupMenu")
-	pCreateWindowEx      = u32.NewProc("CreateWindowExW")
-	pDefWindowProc       = u32.NewProc("DefWindowProcW")
-	pDeleteMenu          = u32.NewProc("DeleteMenu")
-	pDestroyWindow       = u32.NewProc("DestroyWindow")
-	pDispatchMessage     = u32.NewProc("DispatchMessageW")
-	pGetCursorPos        = u32.NewProc("GetCursorPos")
-	pGetMenuItemID       = u32.NewProc("GetMenuItemID")
-	pGetMessage          = u32.NewProc("GetMessageW")
-	pInsertMenuItem      = u32.NewProc("InsertMenuItemW")
-	pLoadIcon            = u32.NewProc("LoadIconW")
-	pLoadImage           = u32.NewProc("LoadImageW")
-	pLoadCursor          = u32.NewProc("LoadCursorW")
-	pPostMessage         = u32.NewProc("PostMessageW")
-	pPostQuitMessage     = u32.NewProc("PostQuitMessage")
-	pRegisterClass       = u32.NewProc("RegisterClassExW")
-	pSetForegroundWindow = u32.NewProc("SetForegroundWindow")
-	pSetMenuInfo         = u32.NewProc("SetMenuInfo")
-	pSetMenuItemInfo     = u32.NewProc("SetMenuItemInfoW")
-	pShowWindow          = u32.NewProc("ShowWindow")
-	pTrackPopupMenu      = u32.NewProc("TrackPopupMenu")
-	pTranslateMessage    = u32.NewProc("TranslateMessage")
-	pUnregisterClass     = u32.NewProc("UnregisterClassW")
-	pUpdateWindow        = u32.NewProc("UpdateWindow")
+	k32                    = windows.NewLazySystemDLL("Kernel32.dll")
+	s32                    = windows.NewLazySystemDLL("Shell32.dll")
+	u32                    = windows.NewLazySystemDLL("User32.dll")
+	pGetModuleHandle       = k32.NewProc("GetModuleHandleW")
+	pShellNotifyIcon       = s32.NewProc("Shell_NotifyIconW")
+	pCreatePopupMenu       = u32.NewProc("CreatePopupMenu")
+	pCreateWindowEx        = u32.NewProc("CreateWindowExW")
+	pDefWindowProc         = u32.NewProc("DefWindowProcW")
+	pDeleteMenu            = u32.NewProc("DeleteMenu")
+	pDestroyWindow         = u32.NewProc("DestroyWindow")
+	pDispatchMessage       = u32.NewProc("DispatchMessageW")
+	pGetCursorPos          = u32.NewProc("GetCursorPos")
+	pGetMenuItemID         = u32.NewProc("GetMenuItemID")
+	pGetMessage            = u32.NewProc("GetMessageW")
+	pInsertMenuItem        = u32.NewProc("InsertMenuItemW")
+	pLoadIcon              = u32.NewProc("LoadIconW")
+	pLoadImage             = u32.NewProc("LoadImageW")
+	pLoadCursor            = u32.NewProc("LoadCursorW")
+	pPostMessage           = u32.NewProc("PostMessageW")
+	pPostQuitMessage       = u32.NewProc("PostQuitMessage")
+	pRegisterClass         = u32.NewProc("RegisterClassExW")
+	pRegisterWindowMessage = u32.NewProc("RegisterWindowMessageW")
+	pSetForegroundWindow   = u32.NewProc("SetForegroundWindow")
+	pSetMenuInfo           = u32.NewProc("SetMenuInfo")
+	pSetMenuItemInfo       = u32.NewProc("SetMenuItemInfoW")
+	pShowWindow            = u32.NewProc("ShowWindow")
+	pTrackPopupMenu        = u32.NewProc("TrackPopupMenu")
+	pTranslateMessage      = u32.NewProc("TranslateMessage")
+	pUnregisterClass       = u32.NewProc("UnregisterClassW")
+	pUpdateWindow          = u32.NewProc("UpdateWindow")
 )
 
 // Contains window class information.
@@ -156,6 +157,8 @@ type winTray struct {
 	loadedImages map[string]windows.Handle
 	nid          *notifyIconData
 	wcex         *wndClassEx
+
+	wmTaskbarCreated uint32
 }
 
 // Loads an image from file and shows it in tray.
@@ -257,6 +260,11 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		case WM_RBUTTONUP, WM_LBUTTONUP:
 			t.showMenu()
 		}
+	case t.wmTaskbarCreated: //on explorer.exe restarts
+		pShellNotifyIcon.Call(
+			NIM_ADD,
+			uintptr(unsafe.Pointer(t.nid)),
+		)
 	default:
 		// Calls the default window procedure to provide default processing for any window messages that an application does not process.
 		// https://msdn.microsoft.com/en-us/library/windows/desktop/ms633572(v=vs.85).aspx
@@ -297,7 +305,15 @@ func (t *winTray) initInstance() error {
 		className  = "SystrayClass"
 		windowName = ""
 	)
-	wt.loadedImages = make(map[string]windows.Handle)
+
+	taskbarEventNamePtr, _ := windows.UTF16PtrFromString("TaskbarCreated")
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644947
+	res, _, err := pRegisterWindowMessage.Call(
+		uintptr(unsafe.Pointer(taskbarEventNamePtr)),
+	)
+	t.wmTaskbarCreated = uint32(res)
+
+	t.loadedImages = make(map[string]windows.Handle)
 
 	instanceHandle, _, err := pGetModuleHandle.Call(0)
 	if instanceHandle == 0 {
@@ -371,8 +387,8 @@ func (t *winTray) initInstance() error {
 		uintptr(t.window),
 	)
 
-	wt.nid = &notifyIconData{
-		Wnd:             windows.Handle(wt.window),
+	t.nid = &notifyIconData{
+		Wnd:             windows.Handle(t.window),
 		ID:              100,
 		Flags:           NIF_MESSAGE,
 		CallbackMessage: WM_SYSTRAY_MESSAGE,
