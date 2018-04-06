@@ -250,9 +250,7 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		if t.nid != nil {
 			t.nid.delete()
 		}
-		if systrayExit != nil {
-			systrayExit()
-		}
+		systrayExit()
 	case t.wmSystrayMessage:
 		switch lParam {
 		case WM_RBUTTONUP, WM_LBUTTONUP:
@@ -578,9 +576,8 @@ func nativeLoop() error {
 		wt.wcex.unregister()
 	}()
 
-	if systrayReady != nil {
-		systrayReady()
-	}
+
+	go systrayReady()
 
 	// Main message pump.
 	m := struct {

@@ -88,7 +88,7 @@ func showMenuItem(item *MenuItem) error {
 
 //export systray_ready
 func systray_ready() {
-	systrayReady()
+	go systrayReady()
 }
 
 //export systray_on_exit
