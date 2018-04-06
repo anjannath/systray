@@ -3,43 +3,16 @@
 package systray
 
 import (
-	"io/ioutil"
-	"os"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
 	"crypto/md5"
 	"encoding/hex"
+	"golang.org/x/sys/windows"
+	"io/ioutil"
 	"path/filepath"
+	"os"
+	"unsafe"
 )
 
 // Helpful sources: https://github.com/golang/exp/blob/master/shiny/driver/internal/win32
-
-// https://msdn.microsoft.com/en-us/library/windows/desktop/bb762159
-const (
-	NIM_ADD    = 0x00000000
-	NIM_MODIFY = 0x00000001
-	NIM_DELETE = 0x00000002
-)
-
-const (
-	NIF_MESSAGE = 0x00000001
-	NIF_ICON    = 0x00000002
-	NIF_TIP     = 0x00000004
-)
-
-// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644931(v=vs.85).aspx
-const (
-	WM_USER       = 0x0400
-	WM_COMMAND    = 0x0111
-	WM_DESTROY    = 0x0002
-	WM_ENDSESSION = 0x16
-	WM_RBUTTONUP  = 0x0205
-	WM_LBUTTONUP  = 0x0202
-
-	// custom messages
-	WM_SYSTRAY_MESSAGE = WM_USER + 1
-)
 
 var (
 	k32                    = windows.NewLazySystemDLL("Kernel32.dll")
@@ -88,7 +61,7 @@ type wndClassEx struct {
 
 // Registers a window class for subsequent use in calls to the CreateWindow or CreateWindowEx function.
 // https://msdn.microsoft.com/en-us/library/ms633587.aspx
-func (w *wndClassEx) Register() error {
+func (w *wndClassEx) register() error {
 	w.Size = uint32(unsafe.Sizeof(*w))
 	res, _, err := pRegisterClass.Call(uintptr(unsafe.Pointer(w)))
 	if res == 0 {
@@ -99,7 +72,7 @@ func (w *wndClassEx) Register() error {
 
 // Unregisters a window class, freeing the memory required for the class.
 // https://msdn.microsoft.com/en-us/library/ms644899.aspx
-func (w *wndClassEx) Unregister() error {
+func (w *wndClassEx) unregister() error {
 	res, _, err := pUnregisterClass.Call(
 		uintptr(unsafe.Pointer(w.ClassName)),
 		uintptr(w.Instance),
@@ -113,6 +86,7 @@ func (w *wndClassEx) Unregister() error {
 // Contains information that the system needs to display notifications in the notification area.
 // Used by Shell_NotifyIcon.
 // https://msdn.microsoft.com/en-us/library/windows/desktop/bb773352(v=vs.85).aspx
+// https://msdn.microsoft.com/en-us/library/windows/desktop/bb762159
 type notifyIconData struct {
 	Size                       uint32
 	Wnd                        windows.Handle
@@ -128,7 +102,43 @@ type notifyIconData struct {
 	BalloonIcon                windows.Handle
 }
 
-// Contains information about a menu item
+func (nid *notifyIconData) add() error {
+	const NIM_ADD = 0x00000000
+	res, _, err := pShellNotifyIcon.Call(
+		uintptr(NIM_ADD),
+		uintptr(unsafe.Pointer(nid)),
+	)
+	if res == 0 {
+		return err
+	}
+	return nil
+}
+
+func (nid *notifyIconData) modify() error {
+	const NIM_MODIFY = 0x00000001
+	res, _, err := pShellNotifyIcon.Call(
+		uintptr(NIM_MODIFY),
+		uintptr(unsafe.Pointer(nid)),
+	)
+	if res == 0 {
+		return err
+	}
+	return nil
+}
+
+func (nid *notifyIconData) delete() error {
+	const NIM_DELETE = 0x00000002
+	res, _, err := pShellNotifyIcon.Call(
+		uintptr(NIM_DELETE),
+		uintptr(unsafe.Pointer(nid)),
+	)
+	if res == 0 {
+		return err
+	}
+	return nil
+}
+
+// Contains information about a menu item.
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms647578(v=vs.85).aspx
 type menuItemInfo struct {
 	Size, Mask, Type, State     uint32
@@ -158,6 +168,7 @@ type winTray struct {
 	nid          *notifyIconData
 	wcex         *wndClassEx
 
+	wmSystrayMessage,
 	wmTaskbarCreated uint32
 }
 
@@ -165,12 +176,9 @@ type winTray struct {
 // LoadImage: https://msdn.microsoft.com/en-us/library/windows/desktop/ms648045(v=vs.85).aspx
 // Shell_NotifyIcon: https://msdn.microsoft.com/en-us/library/windows/desktop/bb762159(v=vs.85).aspx
 func (t *winTray) setIcon(src string) error {
-	const (
-		IMAGE_ICON = 1 // Loads an icon
-	)
-	const (
-		LR_LOADFROMFILE = 0x00000010 // Loads the stand-alone image from the file
-	)
+	const IMAGE_ICON = 1               // Loads an icon
+	const LR_LOADFROMFILE = 0x00000010 // Loads the stand-alone image from the file
+	const NIF_ICON = 0x00000002
 
 	// Save and reuse handles of loaded images
 	h, ok := t.loadedImages[src]
@@ -195,39 +203,25 @@ func (t *winTray) setIcon(src string) error {
 	}
 
 	t.nid.Icon = h
-	t.nid.Flags = NIF_ICON
+	t.nid.Flags |= NIF_ICON
 	t.nid.Size = uint32(unsafe.Sizeof(*t.nid))
 
-	showIconRes, _, err := pShellNotifyIcon.Call(
-		uintptr(NIM_MODIFY),
-		uintptr(unsafe.Pointer(t.nid)),
-	)
-	if showIconRes == 0 {
-		return err
-	}
-
-	return nil
+	return t.nid.modify()
 }
 
 // Sets tooltip on icon.
 // Shell_NotifyIcon: https://msdn.microsoft.com/en-us/library/windows/desktop/bb762159(v=vs.85).aspx
 func (t *winTray) setTooltip(src string) error {
+	const NIF_TIP = 0x00000004
 	b, err := windows.UTF16FromString(src)
 	if err != nil {
 		return err
 	}
 	copy(t.nid.Tip[:], b[:])
-	t.nid.Flags = NIF_TIP
+	t.nid.Flags |= NIF_TIP
 	t.nid.Size = uint32(unsafe.Sizeof(*t.nid))
-	showIconRes, _, err := pShellNotifyIcon.Call(
-		uintptr(NIM_MODIFY),
-		uintptr(unsafe.Pointer(t.nid)),
-	)
-	if showIconRes == 0 {
-		return err
-	}
 
-	return nil
+	return t.nid.modify()
 }
 
 var wt winTray
@@ -235,6 +229,13 @@ var wt winTray
 // WindowProc callback function that processes messages sent to a window.
 // https://msdn.microsoft.com/en-us/library/windows/desktop/ms633573(v=vs.85).aspx
 func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam uintptr) (lResult uintptr) {
+	const (
+		WM_COMMAND    = 0x0111
+		WM_DESTROY    = 0x0002
+		WM_ENDSESSION = 0x16
+		WM_RBUTTONUP  = 0x0205
+		WM_LBUTTONUP  = 0x0202
+	)
 	switch message {
 	case WM_COMMAND:
 		menuId := int32(wParam)
@@ -247,24 +248,18 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 		fallthrough
 	case WM_ENDSESSION:
 		if t.nid != nil {
-			pShellNotifyIcon.Call(
-				NIM_DELETE,
-				uintptr(unsafe.Pointer(t.nid)),
-			)
+			t.nid.delete()
 		}
 		if systrayExit != nil {
 			systrayExit()
 		}
-	case WM_SYSTRAY_MESSAGE:
+	case t.wmSystrayMessage:
 		switch lParam {
 		case WM_RBUTTONUP, WM_LBUTTONUP:
 			t.showMenu()
 		}
-	case t.wmTaskbarCreated: //on explorer.exe restarts
-		pShellNotifyIcon.Call(
-			NIM_ADD,
-			uintptr(unsafe.Pointer(t.nid)),
-		)
+	case t.wmTaskbarCreated: // on explorer.exe restarts
+		t.nid.add()
 	default:
 		// Calls the default window procedure to provide default processing for any window messages that an application does not process.
 		// https://msdn.microsoft.com/en-us/library/windows/desktop/ms633572(v=vs.85).aspx
@@ -300,11 +295,17 @@ func (t *winTray) initInstance() error {
 		CS_HREDRAW = 0x0002
 		CS_VREDRAW = 0x0001
 	)
+	const NIF_MESSAGE = 0x00000001
+
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644931(v=vs.85).aspx
+	const WM_USER = 0x0400
 
 	const (
 		className  = "SystrayClass"
 		windowName = ""
 	)
+
+	t.wmSystrayMessage = WM_USER + 1
 
 	taskbarEventNamePtr, _ := windows.UTF16PtrFromString("TaskbarCreated")
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms644947
@@ -351,11 +352,11 @@ func (t *winTray) initInstance() error {
 		Instance:   t.instance,
 		Icon:       t.icon,
 		Cursor:     t.cursor,
-		Background: windows.Handle(6), //(COLOR_WINDOW + 1)
+		Background: windows.Handle(6), // (COLOR_WINDOW + 1)
 		ClassName:  classNamePtr,
 		IconSm:     t.icon,
 	}
-	if err := t.wcex.Register(); err != nil {
+	if err := t.wcex.register(); err != nil {
 		return err
 	}
 
@@ -391,19 +392,11 @@ func (t *winTray) initInstance() error {
 		Wnd:             windows.Handle(t.window),
 		ID:              100,
 		Flags:           NIF_MESSAGE,
-		CallbackMessage: WM_SYSTRAY_MESSAGE,
+		CallbackMessage: t.wmSystrayMessage,
 	}
 	t.nid.Size = uint32(unsafe.Sizeof(*t.nid))
 
-	showIconRes, _, err := pShellNotifyIcon.Call(
-		uintptr(NIM_ADD),
-		uintptr(unsafe.Pointer(t.nid)),
-	)
-	if showIconRes == 0 {
-		return err
-	}
-
-	return nil
+	return t.nid.add()
 }
 
 func (t *winTray) createMenu() error {
@@ -572,7 +565,6 @@ func (t *winTray) showMenu() error {
 }
 
 func nativeLoop() error {
-	const WM_QUIT = 0x0012
 	if err := wt.initInstance(); err != nil {
 		return err
 	}
@@ -583,7 +575,7 @@ func nativeLoop() error {
 
 	defer func() {
 		pDestroyWindow.Call(uintptr(wt.window))
-		wt.wcex.Unregister()
+		wt.wcex.unregister()
 	}()
 
 	if systrayReady != nil {
@@ -611,18 +603,18 @@ func nativeLoop() error {
 
 func quit() {
 	const WM_CLOSE = 0x0010
-
-	pPostMessage.Call(
-		uintptr(wt.window),
-		WM_CLOSE,
-		0,
-		0,
-	)
+	if wt.window != 0 {
+		pPostMessage.Call(
+			uintptr(wt.window),
+			WM_CLOSE,
+			0,
+			0,
+		)
+	}
 }
 
 // SetIcon sets the systray icon.
-// iconBytes should be the content of .ico for windows and .ico/.jpg/.png
-// for other platforms.
+// iconBytes should be the content of .ico
 func setIcon(iconBytes []byte) error {
 	bh := md5.Sum(iconBytes)
 	dataHash := hex.EncodeToString(bh[:])
@@ -637,20 +629,14 @@ func setIcon(iconBytes []byte) error {
 	return setIconPath(iconFilePath)
 }
 
-// SetIcon sets the systray icon.
-// iconBytes should be the content of .ico for windows and .ico/.jpg/.png
-// for other platforms.
 func setIconPath(path string) error {
 	return wt.setIcon(path)
 }
 
-// SetTitle sets the systray title, only available on Mac.
 func setTitle(title string) error {
 	return nil
 }
 
-// SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
-// only available on Mac and Windows.
 func setTooltip(tooltip string) error {
 	return wt.setTooltip(tooltip)
 }

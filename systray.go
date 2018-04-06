@@ -90,9 +90,12 @@ func Quit() {
 //
 // It can be safely invoked from different goroutines.
 func AddMenuItem(title string, tooltip string) (*MenuItem, error) {
-	id := atomic.AddInt32(&currentID, 1)
-	item := &MenuItem{nil, id, title, tooltip, false, false}
-	item.ClickedCh = make(chan struct{})
+	item := &MenuItem{
+		ClickedCh: make(chan struct{}),
+		id:        atomic.AddInt32(&currentID, 1),
+		title:     title,
+		tooltip:   tooltip,
+	}
 	return item, item.update()
 }
 

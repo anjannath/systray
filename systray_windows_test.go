@@ -24,7 +24,7 @@ func TestBaseWindowsTray(t *testing.T) {
 
 	defer func() {
 		pDestroyWindow.Call(uintptr(wt.window))
-		wt.wcex.Unregister()
+		wt.wcex.unregister()
 	}()
 
 	if err := wt.setIcon("example/icon/iconwin.ico"); err != nil {
