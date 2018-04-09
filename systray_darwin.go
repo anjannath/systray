@@ -28,7 +28,8 @@ func quit() {
 // iconBytes should be the content of .ico/.jpg/.png
 func setIcon(iconBytes []byte) error {
 	cstr := (*C.char)(unsafe.Pointer(&iconBytes[0]))
-	return C.setIcon(cstr, (C.int)(len(iconBytes)))
+	_, err := C.setIcon(cstr, (C.int)(len(iconBytes)))
+	return err
 }
 
 // Sets the systray icon by path to file.
@@ -43,13 +44,15 @@ func setIconPath(path string) error {
 
 // SetTitle sets the systray title, only available on Mac.
 func setTitle(title string) error {
-	return C.setTitle(C.CString(title))
+	_, err := C.setTitle(C.CString(title))
+	return err
 }
 
 // SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
 // only available on Mac and Windows.
 func setTooltip(tooltip string) error {
-	return C.setTooltip(C.CString(tooltip))
+	_, err := C.setTooltip(C.CString(tooltip))
+	return err
 }
 
 func addOrUpdateMenuItem(item *MenuItem) error {
@@ -61,29 +64,33 @@ func addOrUpdateMenuItem(item *MenuItem) error {
 	if item.checked {
 		checked = 1
 	}
-	return C.add_or_update_menu_item(
+	_, err := C.add_or_update_menu_item(
 		C.int(item.id),
 		C.CString(item.title),
 		C.CString(item.tooltip),
 		disabled,
 		checked,
 	)
+	return err
 }
 
 func addSeparator(id int32) error {
-	return C.add_separator(C.int(id))
+	_, err := C.add_separator(C.int(id))
+	return err
 }
 
 func hideMenuItem(item *MenuItem) error {
-	return C.hide_menu_item(
+	_, err := C.hide_menu_item(
 		C.int(item.id),
 	)
+	return err
 }
 
 func showMenuItem(item *MenuItem) error {
-	return C.show_menu_item(
+	_, err := C.show_menu_item(
 		C.int(item.id),
 	)
+	return err
 }
 
 //export systray_ready
