@@ -3,15 +3,18 @@
 package systray
 
 import (
-	"testing"
-	"sync/atomic"
-	"time"
-	"golang.org/x/sys/windows"
-	"unsafe"
 	"runtime"
+	"sync/atomic"
+	"testing"
+	"time"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestBaseWindowsTray(t *testing.T) {
+	systrayReady = func(){}
+	systrayExit = func(){}
 	runtime.LockOSThread()
 
 	if err := wt.initInstance(); err != nil {
@@ -36,11 +39,11 @@ func TestBaseWindowsTray(t *testing.T) {
 	}
 
 	var id int32 = 0
-	err := wt.addOrUpdateMenuItem(atomic.AddInt32(&id, 1), "Simple enabled", false, false)
+	err := wt.addOrUpdateMenuItem(&MenuItem{title: "Test title", id: atomic.AddInt32(&id, 1)})
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
-	err = wt.addOrUpdateMenuItem(atomic.AddInt32(&id, 1), "Simple disabled", true, false)
+	err = wt.addOrUpdateMenuItem(&MenuItem{title: "Simple disabled", id: atomic.AddInt32(&id, 1), disabled: true})
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
@@ -48,11 +51,11 @@ func TestBaseWindowsTray(t *testing.T) {
 	if err != nil {
 		t.Errorf("addSeparatorMenuItem failed: %s", err)
 	}
-	err = wt.addOrUpdateMenuItem(atomic.AddInt32(&id, 1), "Simple checked enabled", false, true)
+	err = wt.addOrUpdateMenuItem(&MenuItem{title: "Simple checked enabled", id: atomic.AddInt32(&id, 1), checkable: true})
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
-	err = wt.addOrUpdateMenuItem(atomic.AddInt32(&id, 1), "Simple checked disabled", true, true)
+	err = wt.addOrUpdateMenuItem(&MenuItem{title: "Simple checked disabled", id: atomic.AddInt32(&id, 1), checkable: true, checked: true, disabled: true})
 	if err != nil {
 		t.Errorf("mergeMenuItem failed: %s", err)
 	}
@@ -65,11 +68,6 @@ func TestBaseWindowsTray(t *testing.T) {
 	err = wt.hideMenuItem(100)
 	if err == nil {
 		t.Error("hideMenuItem failed: must return error on invalid item id")
-	}
-
-	err = wt.addOrUpdateMenuItem(2, "Simple disabled update", true, false)
-	if err != nil {
-		t.Errorf("mergeMenuItem failed: %s", err)
 	}
 
 	time.AfterFunc(3*time.Second, quit)

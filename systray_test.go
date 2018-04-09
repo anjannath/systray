@@ -1,8 +1,8 @@
 package systray
 
 import (
-	"testing"
 	"log"
+	"testing"
 	"time"
 )
 
@@ -15,9 +15,6 @@ func TestRun(t *testing.T) {
 	}
 
 	bSomeBtn := AddMenuItem("Йа Кнопко", "", ItemCheckable)
-	if err := bSomeBtn.Check(); err != nil {
-		t.Fatalf("Can't check button: %s", err)
-	}
 	AddSeparator()
 	bQuit := AddMenuItem("Quit", "Quit the whole app", ItemDefault)
 

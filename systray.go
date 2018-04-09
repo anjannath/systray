@@ -14,12 +14,12 @@ at the very beginning of main() to lock at main thread.
 package systray
 
 import (
+	"errors"
+	"os"
 	"runtime"
+	"sort"
 	"sync"
 	"sync/atomic"
-	"os"
-	"sort"
-	"errors"
 )
 
 var (
@@ -284,7 +284,7 @@ func initMenu() {
 	}
 }
 
-func systrayMenuItemSelected(id, checked int32) {
+func systrayMenuItemSelected(id int32) {
 	menuItemsLock.RLock()
 	defer menuItemsLock.RUnlock()
 	item, ok := menuItems[id]
@@ -293,7 +293,9 @@ func systrayMenuItemSelected(id, checked int32) {
 	}
 
 	if item.checkable {
-		item.checked = checked != 0
+		// toggle state
+		item.checked = !item.checked
+		item.update()
 	}
 	select {
 	case item.clickedCh <- struct{}{}:

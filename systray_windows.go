@@ -5,11 +5,12 @@ package systray
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"golang.org/x/sys/windows"
 	"io/ioutil"
-	"path/filepath"
 	"os"
+	"path/filepath"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // Helpful sources: https://github.com/golang/exp/blob/master/shiny/driver/internal/win32
@@ -427,9 +428,7 @@ func (t *winTray) createMenu() error {
 	return nil
 }
 
-// TODO: make auto toggle (https://msdn.microsoft.com/en-us/library/windows/desktop/ms647558(v=vs.85).aspx#_win32_Simulating_Check_Boxes_in_a_Menu)
-
-func (t *winTray) addOrUpdateMenuItem(menuId int32, title string, disabled, checked bool) error {
+func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647578(v=vs.85).aspx
 	const (
 		MIIM_FTYPE  = 0x00000100
@@ -442,7 +441,7 @@ func (t *winTray) addOrUpdateMenuItem(menuId int32, title string, disabled, chec
 		MFS_CHECKED  = 0x00000008
 		MFS_DISABLED = 0x00000003
 	)
-	titlePtr, err := windows.UTF16PtrFromString(title)
+	titlePtr, err := windows.UTF16PtrFromString(item.title)
 	if err != nil {
 		return err
 	}
@@ -450,25 +449,25 @@ func (t *winTray) addOrUpdateMenuItem(menuId int32, title string, disabled, chec
 	mi := menuItemInfo{
 		Mask:     MIIM_FTYPE | MIIM_STRING | MIIM_ID | MIIM_STATE,
 		Type:     MFT_STRING,
-		ID:       uint32(menuId),
+		ID:       uint32(item.id),
 		TypeData: titlePtr,
-		Cch:      uint32(len(title)),
+		Cch:      uint32(len(item.title)),
 	}
-	if disabled {
-		mi.State |= MFS_DISABLED
-	}
-	if checked {
+	if item.checkable && item.checked {
 		mi.State |= MFS_CHECKED
+	}
+	if item.disabled {
+		mi.State |= MFS_DISABLED
 	}
 	mi.Size = uint32(unsafe.Sizeof(mi))
 
 	// The return value is the identifier of the specified menu item.
 	// If the menu item identifier is NULL or if the specified item opens a submenu, the return value is -1.
-	res, _, err := pGetMenuItemID.Call(uintptr(t.menu), uintptr(menuId))
+	res, _, err := pGetMenuItemID.Call(uintptr(t.menu), uintptr(item.id))
 	if int32(res) == -1 {
 		res, _, err = pInsertMenuItem.Call(
 			uintptr(t.menu),
-			uintptr(menuId),
+			uintptr(item.id),
 			1,
 			uintptr(unsafe.Pointer(&mi)),
 		)
@@ -478,7 +477,7 @@ func (t *winTray) addOrUpdateMenuItem(menuId int32, title string, disabled, chec
 	} else {
 		res, _, err = pSetMenuItemInfo.Call(
 			uintptr(t.menu),
-			uintptr(menuId),
+			uintptr(item.id),
 			0,
 			uintptr(unsafe.Pointer(&mi)),
 		)
@@ -643,7 +642,7 @@ func addOrUpdateMenuItem(item *MenuItem) error {
 	if item.isSeparator {
 		return addSeparator(item.id)
 	}
-	return wt.addOrUpdateMenuItem(item.id, item.title, item.Disabled(), item.Checked())
+	return wt.addOrUpdateMenuItem(item)
 }
 
 func addSeparator(id int32) error {
