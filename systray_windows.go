@@ -427,6 +427,8 @@ func (t *winTray) createMenu() error {
 	return nil
 }
 
+// TODO: make auto toggle (https://msdn.microsoft.com/en-us/library/windows/desktop/ms647558(v=vs.85).aspx#_win32_Simulating_Check_Boxes_in_a_Menu)
+
 func (t *winTray) addOrUpdateMenuItem(menuId int32, title string, disabled, checked bool) error {
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647578(v=vs.85).aspx
 	const (

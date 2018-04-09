@@ -107,5 +107,5 @@ func systray_on_exit() {
 
 //export systray_menu_item_selected
 func systray_menu_item_selected(cID C.int) {
-	systrayMenuItemSelected(int32(cID))
+	systrayMenuItemSelected(int32(cID), 0)
 }

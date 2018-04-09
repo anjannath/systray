@@ -37,7 +37,20 @@ int nativeLoop(void) {
 }
 
 void _systray_menu_item_selected(int *id) {
-	systray_menu_item_selected(*id);
+	systray_menu_item_selected(*id, 0);
+}
+
+void _systray_menu_item_changed(int *id) {
+    int checked = 0;
+    GList* it;
+	for(it = global_menu_items; it != NULL; it = it->next) {
+        MenuItemNode* item = (MenuItemNode*)(it->data);
+        if(item->menu_id == *id){
+            checked = gtk_check_menu_item_get_active((GtkCheckMenuItem*)(item->menu_item)) ? 1 : 0;
+            break;
+        }
+    }
+	systray_menu_item_selected(*id, checked);
 }
 
 // runs in main thread, should always return FALSE to prevent gtk to execute it again
@@ -63,7 +76,7 @@ gboolean do_add_or_update_menu_item(gpointer data) {
 		if(mii->checkable) {
 		    menu_item = gtk_check_menu_item_new_with_label(mii->title);
 		    gtk_check_menu_item_set_active((GtkCheckMenuItem*)(menu_item), mii->checked == 1);
-		    g_signal_connect_swapped(G_OBJECT(menu_item), "toggled", G_CALLBACK(_systray_menu_item_selected), id);
+		    g_signal_connect_swapped(G_OBJECT(menu_item), "toggled", G_CALLBACK(_systray_menu_item_changed), id);
 		} else {
 		    menu_item = gtk_menu_item_new_with_label(mii->title);
 		    g_signal_connect_swapped(G_OBJECT(menu_item), "activate", G_CALLBACK(_systray_menu_item_selected), id);

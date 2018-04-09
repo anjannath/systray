@@ -1,6 +1,6 @@
 extern void systray_ready();
 extern void systray_on_exit();
-extern void systray_menu_item_selected(int menu_id);
+extern void systray_menu_item_selected(int menu_id, int checked);
 int nativeLoop(void);
 
 void setIcon(char* icon_path);

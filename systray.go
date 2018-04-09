@@ -77,10 +77,10 @@ func Run(onReady func(), onExit func()) error {
 
 	systrayReady = func() {
 		atomic.StoreInt32(&hasStarted, 1)
+		initMenu()
 		if onReady != nil {
 			onReady()
 		}
-		initMenu()
 	}
 
 	// onExit runs in the event loop to make sure it has time to
@@ -284,10 +284,17 @@ func initMenu() {
 	}
 }
 
-func systrayMenuItemSelected(id int32) {
+func systrayMenuItemSelected(id, checked int32) {
 	menuItemsLock.RLock()
-	item := menuItems[id]
-	menuItemsLock.RUnlock()
+	defer menuItemsLock.RUnlock()
+	item, ok := menuItems[id]
+	if !ok {
+		return
+	}
+
+	if item.checkable {
+		item.checked = checked != 0
+	}
 	select {
 	case item.clickedCh <- struct{}{}:
 		// in case no one waiting for the channel
