@@ -18,6 +18,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"os"
+	"sort"
+	"errors"
 )
 
 var (
@@ -25,11 +27,19 @@ var (
 	hasQuit    = int32(0)
 )
 
+const (
+	ItemDefault        = 0
+	ItemSeparator byte = 1 << iota
+	ItemChecked
+	ItemCheckable
+	ItemDisabled
+)
+
 // MenuItem is used to keep track each menu item of systray
 // Don't create it directly, use the one systray.AddMenuItem() returned
 type MenuItem struct {
 	// ClickedCh is the channel which will be notified when the menu item is clicked
-	ClickedCh chan struct{}
+	clickedCh chan struct{}
 
 	// id uniquely identify a menu item, not supposed to be modified
 	id int32
@@ -37,10 +47,12 @@ type MenuItem struct {
 	title string
 	// tooltip is the text shown when pointing to menu item
 	tooltip string
-	// disabled menu item is grayed out and has no effect when clicked
-	disabled bool
-	// checked menu item has a tick before the title
-	checked bool
+
+	isSeparator bool
+
+	checkable bool
+	checked   bool
+	disabled  bool
 }
 
 var (
@@ -49,7 +61,11 @@ var (
 	menuItems     = make(map[int32]*MenuItem)
 	menuItemsLock sync.RWMutex
 
-	currentID = int32(-1)
+	iconTitle   string
+	iconTooltip string
+	iconPath    string
+	iconData    []byte
+	idSequence  = int32(-1)
 )
 
 // Run initializes GUI and starts the event loop, then invokes the onReady
@@ -58,12 +74,14 @@ var (
 // Should be called at the very beginning of main() to lock at main thread.
 func Run(onReady func(), onExit func()) error {
 	runtime.LockOSThread()
-	atomic.StoreInt32(&hasStarted, 1)
 
-	if onReady == nil {
-		systrayReady = func() {}
+	systrayReady = func() {
+		atomic.StoreInt32(&hasStarted, 1)
+		if onReady != nil {
+			onReady()
+		}
+		initMenu()
 	}
-	systrayReady = onReady
 
 	// onExit runs in the event loop to make sure it has time to
 	// finish before the process terminates
@@ -86,19 +104,39 @@ func Quit() {
 // that notifies whenever that menu item is clicked.
 //
 // It can be safely invoked from different goroutines.
-func AddMenuItem(title string, tooltip string) (*MenuItem, error) {
-	item := &MenuItem{
-		ClickedCh: make(chan struct{}),
-		id:        atomic.AddInt32(&currentID, 1),
-		title:     title,
-		tooltip:   tooltip,
+func AddMenuItem(title, tooltip string, flags byte) *MenuItem {
+	menuItemsLock.Lock()
+	defer menuItemsLock.Unlock()
+
+	if ItemSeparator&flags != 0 {
+		// remove other flags if separator
+		flags = ItemSeparator
+	} else if ItemCheckable&flags == 0 {
+		// remove "checked" flag if not checkable
+		flags &= ^ItemChecked
 	}
-	return item, item.update()
+
+	item := &MenuItem{
+		clickedCh:   make(chan struct{}),
+		id:          atomic.AddInt32(&idSequence, 1),
+		title:       title,
+		tooltip:     tooltip,
+		isSeparator: ItemSeparator&flags != 0,
+		checkable:   ItemCheckable&flags != 0,
+		checked:     ItemChecked&flags != 0,
+		disabled:    ItemDisabled&flags != 0,
+	}
+	menuItems[item.id] = item
+
+	if atomic.LoadInt32(&hasStarted) == 1 {
+		item.update()
+	}
+	return item
 }
 
 // AddSeparator adds a separator bar to the menu.
-func AddSeparator() error {
-	return addSeparator(atomic.AddInt32(&currentID, 1))
+func AddSeparator() *MenuItem {
+	return AddMenuItem("", "", ItemSeparator)
 }
 
 // SetTitle set the text to display on a menu item.
@@ -147,22 +185,29 @@ func (item *MenuItem) Checked() bool {
 
 // Check a menu item regardless if it's previously checked or not.
 func (item *MenuItem) Check() error {
+	if !item.checkable {
+		return errors.New("item must be checkable")
+	}
 	item.checked = true
 	return item.update()
 }
 
 // Uncheck a menu item regardless if it's previously unchecked or not.
 func (item *MenuItem) Uncheck() error {
+	if !item.checkable {
+		return errors.New("item must be checkable")
+	}
 	item.checked = false
 	return item.update()
 }
 
 // update propogates changes on a menu item to systray.
 func (item *MenuItem) update() error {
-	menuItemsLock.Lock()
-	defer menuItemsLock.Unlock()
-	menuItems[item.id] = item
 	return addOrUpdateMenuItem(item)
+}
+
+func (item *MenuItem) OnClickCh() <-chan struct{} {
+	return item.clickedCh
 }
 
 // SetIcon sets the systray icon.
@@ -170,6 +215,10 @@ func (item *MenuItem) update() error {
 // for other platforms.
 // On windows and linux it creates reusable temporary file with icon content. This file
 func SetIcon(iconBytes []byte) error {
+	if atomic.LoadInt32(&hasStarted) == 0 {
+		iconData = iconBytes
+		return nil
+	}
 	return setIcon(iconBytes)
 }
 
@@ -179,19 +228,60 @@ func SetIconPath(path string) error {
 	if _, err := os.Stat(path); err != nil {
 		return err
 	}
-
+	if atomic.LoadInt32(&hasStarted) == 0 {
+		iconPath = path
+		return nil
+	}
 	return setIconPath(path)
 }
 
 // SetTitle sets the systray title, only available on Mac.
 func SetTitle(title string) error {
+	if atomic.LoadInt32(&hasStarted) == 0 {
+		iconTitle = title
+		return nil
+	}
 	return setTitle(title)
 }
 
 // SetTooltip sets the systray tooltip to display on mouse hover of the tray icon,
 // only available on Mac and Windows.
 func SetTooltip(tooltip string) error {
+	if atomic.LoadInt32(&hasStarted) == 0 {
+		iconTooltip = tooltip
+		return nil
+	}
 	return setTooltip(tooltip)
+}
+
+func initMenu() {
+	menuItemsLock.RLock()
+	defer menuItemsLock.RUnlock()
+
+	if iconPath != "" {
+		SetIconPath(iconPath)
+	} else if iconData != nil {
+		SetIcon(iconData)
+	}
+
+	if iconTitle != "" {
+		SetTitle(iconTitle)
+	}
+
+	if iconTooltip != "" {
+		SetTooltip(iconTooltip)
+	}
+
+	keys := make([]int, len(menuItems))
+	i := 0
+	for k := range menuItems {
+		keys[i] = int(k)
+		i++
+	}
+	sort.Ints(keys)
+	for _, k := range keys {
+		menuItems[int32(k)].update()
+	}
 }
 
 func systrayMenuItemSelected(id int32) {
@@ -199,7 +289,7 @@ func systrayMenuItemSelected(id int32) {
 	item := menuItems[id]
 	menuItemsLock.RUnlock()
 	select {
-	case item.ClickedCh <- struct{}{}:
+	case item.clickedCh <- struct{}{}:
 		// in case no one waiting for the channel
 	default:
 	}

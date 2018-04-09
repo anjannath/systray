@@ -64,11 +64,16 @@ func setTooltip(tooltip string) (err error) {
 }
 
 func addOrUpdateMenuItem(item *MenuItem) (err error) {
-	var disabled C.short
+	if item.isSeparator {
+		return addSeparator(item.id)
+	}
+	var disabled, checkable, checked C.short
 	if item.disabled {
 		disabled = 1
 	}
-	var checked C.short
+	if item.checkable {
+		checkable = 1
+	}
 	if item.checked {
 		checked = 1
 	}
@@ -77,6 +82,7 @@ func addOrUpdateMenuItem(item *MenuItem) (err error) {
 		C.CString(item.title),
 		C.CString(item.tooltip),
 		disabled,
+		checkable,
 		checked,
 	)
 	return

@@ -576,7 +576,6 @@ func nativeLoop() error {
 		wt.wcex.unregister()
 	}()
 
-
 	go systrayReady()
 
 	// Main message pump.
@@ -639,7 +638,10 @@ func setTooltip(tooltip string) error {
 }
 
 func addOrUpdateMenuItem(item *MenuItem) error {
-	return wt.addOrUpdateMenuItem(item.id, item.title, item.disabled, item.checked)
+	if item.isSeparator {
+		return addSeparator(item.id)
+	}
+	return wt.addOrUpdateMenuItem(item.id, item.title, item.Disabled(), item.Checked())
 }
 
 func addSeparator(id int32) error {

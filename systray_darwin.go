@@ -56,11 +56,13 @@ func setTooltip(tooltip string) error {
 }
 
 func addOrUpdateMenuItem(item *MenuItem) error {
-	var disabled C.short
+	if item.isSeparator {
+		return addSeparator(item.id)
+	}
+	var disabled, checked C.short
 	if item.disabled {
 		disabled = 1
 	}
-	var checked C.short
 	if item.checked {
 		checked = 1
 	}

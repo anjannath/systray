@@ -19,6 +19,7 @@ typedef struct {
 	char* title;
 	char* tooltip;
 	short disabled;
+	short checkable;
 	short checked;
 } MenuItemInfo;
 
@@ -47,16 +48,26 @@ gboolean do_add_or_update_menu_item(gpointer data) {
 		MenuItemNode* item = (MenuItemNode*)(it->data);
 		if(item->menu_id == mii->menu_id){
 			gtk_menu_item_set_label(GTK_MENU_ITEM(item->menu_item), mii->title);
+			if(mii->checkable == 1) {
+			    gtk_check_menu_item_set_active((GtkCheckMenuItem*)(item->menu_item), mii->checked == 1);
+			}
 			break;
 		}
 	}
 
 	// menu id doesn't exist, add new item
 	if(it == NULL) {
-		GtkWidget *menu_item = gtk_menu_item_new_with_label(mii->title);
+		GtkWidget *menu_item;
 		int *id = malloc(sizeof(int));
 		*id = mii->menu_id;
-		g_signal_connect_swapped(G_OBJECT(menu_item), "activate", G_CALLBACK(_systray_menu_item_selected), id);
+		if(mii->checkable) {
+		    menu_item = gtk_check_menu_item_new_with_label(mii->title);
+		    gtk_check_menu_item_set_active((GtkCheckMenuItem*)(menu_item), mii->checked == 1);
+		    g_signal_connect_swapped(G_OBJECT(menu_item), "toggled", G_CALLBACK(_systray_menu_item_selected), id);
+		} else {
+		    menu_item = gtk_menu_item_new_with_label(mii->title);
+		    g_signal_connect_swapped(G_OBJECT(menu_item), "activate", G_CALLBACK(_systray_menu_item_selected), id);
+		}
 		gtk_menu_shell_append(GTK_MENU_SHELL(global_tray_menu), menu_item);
 
 		MenuItemNode* new_item = malloc(sizeof(MenuItemNode));
@@ -138,12 +149,13 @@ void setTooltip(char* ctooltip) {
 	free(ctooltip);
 }
 
-void add_or_update_menu_item(int menu_id, char* title, char* tooltip, short disabled, short checked) {
+void add_or_update_menu_item(int menu_id, char* title, char* tooltip, short disabled, short checkable, short checked) {
 	MenuItemInfo *mii = malloc(sizeof(MenuItemInfo));
 	mii->menu_id = menu_id;
 	mii->title = title;
 	mii->tooltip = tooltip;
 	mii->disabled = disabled;
+	mii->checkable = checkable;
 	mii->checked = checked;
 	g_idle_add(do_add_or_update_menu_item, mii);
 }
