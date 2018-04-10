@@ -284,7 +284,7 @@ func initMenu() {
 	}
 }
 
-func systrayMenuItemSelected(id int32) {
+func systrayMenuItemSelected(id int32, forceState bool, newState bool) {
 	menuItemsLock.RLock()
 	defer menuItemsLock.RUnlock()
 	item, ok := menuItems[id]
@@ -293,10 +293,15 @@ func systrayMenuItemSelected(id int32) {
 	}
 
 	if item.checkable {
-		// toggle state
-		item.checked = !item.checked
-		item.update()
+		if forceState {
+			item.checked = newState
+		} else {
+			// toggle state
+			item.checked = !item.checked
+			item.update()
+		}
 	}
+
 	select {
 	case item.clickedCh <- struct{}{}:
 		// in case no one waiting for the channel

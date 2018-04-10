@@ -241,7 +241,7 @@ func (t *winTray) wndProc(hWnd windows.Handle, message uint32, wParam, lParam ui
 	case WM_COMMAND:
 		menuId := int32(wParam)
 		if menuId != -1 {
-			systrayMenuItemSelected(menuId)
+			systrayMenuItemSelected(menuId, false, false)
 		}
 	case WM_DESTROY:
 		// same as WM_ENDSESSION, but throws 0 exit code after all
