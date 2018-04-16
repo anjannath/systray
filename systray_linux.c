@@ -151,6 +151,7 @@ gboolean do_quit(gpointer data) {
 void setIcon(char* icon_path) {
 	app_indicator_set_icon_full(global_app_indicator, icon_path, "");
 	app_indicator_set_attention_icon_full(global_app_indicator, icon_path, "");
+	free(icon_path);
 }
 
 void setTitle(char* ctitle) {
