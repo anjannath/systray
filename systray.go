@@ -43,12 +43,15 @@ type MenuItem struct {
 
 	// id uniquely identify a menu item, not supposed to be modified
 	id int32
+	// menuId uniquely identify a menu the menu item belogns to
+	menuId int32
 	// title is the text shown on menu item
 	title string
 	// tooltip is the text shown when pointing to menu item
 	tooltip string
 
-	isSeparator bool
+	isSeparator   bool
+	isSubmenuItem bool
 
 	checkable bool
 	checked   bool
@@ -117,14 +120,15 @@ func AddMenuItem(title, tooltip string, flags byte) *MenuItem {
 	}
 
 	item := &MenuItem{
-		clickedCh:   make(chan struct{}),
-		id:          atomic.AddInt32(&idSequence, 1),
-		title:       title,
-		tooltip:     tooltip,
-		isSeparator: ItemSeparator&flags != 0,
-		checkable:   ItemCheckable&flags != 0,
-		checked:     ItemChecked&flags != 0,
-		disabled:    ItemDisabled&flags != 0,
+		clickedCh:     make(chan struct{}),
+		id:            atomic.AddInt32(&idSequence, 1),
+		title:         title,
+		tooltip:       tooltip,
+		isSubmenuItem: false,
+		isSeparator:   ItemSeparator&flags != 0,
+		checkable:     ItemCheckable&flags != 0,
+		checked:       ItemChecked&flags != 0,
+		disabled:      ItemDisabled&flags != 0,
 	}
 	menuItems[item.id] = item
 
@@ -132,6 +136,77 @@ func AddMenuItem(title, tooltip string, flags byte) *MenuItem {
 		item.update()
 	}
 	return item
+}
+
+// AddSubMenu adds a sub menu to the systray and
+// and returns an id to access to accesss the menu
+func AddSubMenu(title string) *MenuItem {
+	subMenuId := atomic.AddInt32(&idSequence, 1)
+	createSubMenu(subMenuId)
+
+	item := &MenuItem{
+		clickedCh:     make(chan struct{}),
+		id:            atomic.AddInt32(&idSequence, 1),
+		title:         title,
+		menuId:        subMenuId,
+		isSubmenuItem: false,
+	}
+	if atomic.LoadInt32(&hasStarted) == 1 {
+		addSubmenuToTray(item)
+	}
+	return item
+}
+
+func (sitem *MenuItem) AddSubMenuItem(title, tooltip string, flags byte) *MenuItem {
+	menuItemsLock.Lock()
+	defer menuItemsLock.Unlock()
+
+	if ItemSeparator&flags != 0 {
+		// remove other flags if separator
+		flags = ItemSeparator
+	} else if ItemCheckable&flags == 0 {
+		// remove "checked" flag if not checkable
+		flags &= ^ItemChecked
+	}
+
+	item := &MenuItem{
+		clickedCh:     make(chan struct{}),
+		id:            atomic.AddInt32(&idSequence, 1),
+		title:         title,
+		tooltip:       tooltip,
+		menuId:        sitem.menuId,
+		isSeparator:   ItemSeparator&flags != 0,
+		isSubmenuItem: true,
+		checkable:     ItemCheckable&flags != 0,
+		checked:       ItemChecked&flags != 0,
+		disabled:      ItemDisabled&flags != 0,
+	}
+	menuItems[item.id] = item
+
+	if atomic.LoadInt32(&hasStarted) == 1 {
+		item.update()
+	}
+	return item
+}
+
+func (item *MenuItem) AddBitmap(bitmapByte []byte) error {
+	menuItemsLock.Lock()
+	defer menuItemsLock.Unlock()
+
+	if atomic.LoadInt32(&hasStarted) == 1 {
+		return addBitmap(bitmapByte, item)
+	}
+	return errors.New("Could not set bitmap on menuitem")
+}
+
+func (item *MenuItem) AddBitmapPath(filepath string) error {
+	menuItemsLock.Lock()
+	defer menuItemsLock.Unlock()
+
+	if atomic.LoadInt32(&hasStarted) == 1 {
+		return addBitmapPath(filepath, item)
+	}
+	return errors.New("Could not set bitmap on menuitem")
 }
 
 // AddSeparator adds a separator bar to the menu.
