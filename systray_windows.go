@@ -5,6 +5,7 @@ package systray
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -41,6 +42,7 @@ var (
 	pSetForegroundWindow   = u32.NewProc("SetForegroundWindow")
 	pSetMenuInfo           = u32.NewProc("SetMenuInfo")
 	pSetMenuItemInfo       = u32.NewProc("SetMenuItemInfoW")
+	pSetMenuItemBitmaps    = u32.NewProc("SetMenuItemBitmaps")
 	pShowWindow            = u32.NewProc("ShowWindow")
 	pTrackPopupMenu        = u32.NewProc("TrackPopupMenu")
 	pTranslateMessage      = u32.NewProc("TranslateMessage")
@@ -172,6 +174,8 @@ type winTray struct {
 	wmSystrayMessage,
 	wmTaskbarCreated uint32
 }
+
+var menus = make(map[string]windows.Handle)
 
 // Loads an image from file and shows it in tray.
 // LoadImage: https://msdn.microsoft.com/en-us/library/windows/desktop/ms648045(v=vs.85).aspx
@@ -428,6 +432,92 @@ func (t *winTray) createMenu() error {
 	return nil
 }
 
+// createSubMenu creates a sub menu and stores
+// it in the menus map using the id as key
+func createSubMenu(id string) error {
+	const MIM_APPLYTOSUBMENUS = 0x80000000 // Settings apply to the menu and all of its submenus
+
+	menuHandle, _, err := pCreatePopupMenu.Call()
+	if menuHandle == 0 {
+		return err
+	}
+	menus[id] = windows.Handle(menuHandle)
+
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647575(v=vs.85).aspx
+	mi := struct {
+		Size, Mask, Style, Max uint32
+		Background             windows.Handle
+		ContextHelpID          uint32
+		MenuData               uintptr
+	}{
+		Mask: MIM_APPLYTOSUBMENUS,
+	}
+	mi.Size = uint32(unsafe.Sizeof(mi))
+
+	res, _, err := pSetMenuInfo.Call(
+		uintptr(menus[id]),
+		uintptr(unsafe.Pointer(&mi)),
+	)
+	if res == 0 {
+		return err
+	}
+	return nil
+}
+
+func (t *winTray) addSubmenuToTray(id, title string, item *MenuItem) error {
+	const (
+		MIIM_FTYPE   = 0x00000100
+		MIIM_STRING  = 0x00000040
+		MIIM_ID      = 0x00000002
+		MIIM_SUBMENU = 0x00000004
+	)
+
+	const MFT_STRING = 0x00000000
+
+	titlePtr, err := windows.UTF16PtrFromString(item.title)
+	if err != nil {
+		return err
+	}
+
+	mi := menuItemInfo{
+		Mask:     MIIM_FTYPE | MIIM_STRING | MIIM_ID | MIIM_SUBMENU,
+		Type:     MFT_STRING,
+		ID:       uint32(item.id),
+		TypeData: titlePtr,
+		Cch:      uint32(len(item.title)),
+		SubMenu:  menus[id],
+	}
+	mi.Size = uint32(unsafe.Sizeof(mi))
+
+	// The return value is the identifier of the specified menu item.
+	// If the menu item identifier is NULL or if the specified item opens a submenu, the return value is -1.
+	res, _, err := pGetMenuItemID.Call(uintptr(t.menu), uintptr(item.id))
+	if int32(res) == -1 {
+		res, _, err = pInsertMenuItem.Call(
+			uintptr(t.menu),
+			uintptr(item.id),
+			1,
+			uintptr(unsafe.Pointer(&mi)),
+		)
+		if res == 0 {
+			return err
+		}
+	} else {
+		res, _, err = pSetMenuItemInfo.Call(
+			uintptr(t.menu),
+			uintptr(item.id),
+			0,
+			uintptr(unsafe.Pointer(&mi)),
+		)
+		if res == 0 {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
 func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
 	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647578(v=vs.85).aspx
 	const (
@@ -487,6 +577,135 @@ func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
 	}
 
 	return nil
+}
+
+func addOrUpdateSubMenuItem(id string, item *MenuItem) error {
+	// https://msdn.microsoft.com/en-us/library/windows/desktop/ms647578(v=vs.85).aspx
+	const (
+		MIIM_FTYPE  = 0x00000100
+		MIIM_STRING = 0x00000040
+		MIIM_ID     = 0x00000002
+		MIIM_STATE  = 0x00000001
+	)
+	const MFT_STRING = 0x00000000
+	const (
+		MFS_CHECKED  = 0x00000008
+		MFS_DISABLED = 0x00000003
+	)
+	titlePtr, err := windows.UTF16PtrFromString(item.title)
+	if err != nil {
+		return err
+	}
+
+	mi := menuItemInfo{
+		Mask:     MIIM_FTYPE | MIIM_STRING | MIIM_ID | MIIM_STATE,
+		Type:     MFT_STRING,
+		ID:       uint32(item.id),
+		TypeData: titlePtr,
+		Cch:      uint32(len(item.title)),
+	}
+	if item.checkable && item.checked {
+		mi.State |= MFS_CHECKED
+	}
+	if item.disabled {
+		mi.State |= MFS_DISABLED
+	}
+	mi.Size = uint32(unsafe.Sizeof(mi))
+
+	// The return value is the identifier of the specified menu item.
+	// If the menu item identifier is NULL or if the specified item opens a submenu, the return value is -1.
+	res, _, err := pGetMenuItemID.Call(uintptr(menus[id]), uintptr(item.id))
+	if int32(res) == -1 {
+		res, _, err = pInsertMenuItem.Call(
+			uintptr(menus[id]),
+			uintptr(item.id),
+			1,
+			uintptr(unsafe.Pointer(&mi)),
+		)
+		if res == 0 {
+			return err
+		}
+	} else {
+		res, _, err = pSetMenuItemInfo.Call(
+			uintptr(menus[id]),
+			uintptr(item.id),
+			0,
+			uintptr(unsafe.Pointer(&mi)),
+		)
+		if res == 0 {
+			return err
+		}
+	}
+
+	return nil
+
+}
+
+func (t *winTray) addBitMapMenuItem(bitmapPath string, item *MenuItem) error {
+	const (
+		MIIM_BITMAP = 0x00000080
+		MIIM_FTYPE  = 0x00000100
+		MIIM_ID     = 0x00000002
+		MIIM_STRING = 0x00000040
+
+		IMAGE_BITMAP    = 0          // Loads a bitmap
+		LR_LOADFROMFILE = 0x00000010 // Loads the stand-alone image from the file
+	)
+
+	// Create a handle of the bitmap
+	srcPtr, err := windows.UTF16PtrFromString(bitmapPath)
+	if err != nil {
+		return err
+	}
+	fmt.Println(bitmapPath)
+	res, _, err := pLoadImage.Call(
+		0,
+		uintptr(unsafe.Pointer(srcPtr)),
+		IMAGE_BITMAP,
+		0,
+		0,
+		LR_LOADFROMFILE,
+	)
+	if res == 0 {
+		return err
+	}
+	h := windows.Handle(res)
+
+	/*mi := menuItemInfo{
+		Mask: MIIM_BITMAP | MIIM_FTYPE | MIIM_ID | MIIM_STRING,
+		ID:   uint32(item.id),
+		Cch:  uint32(len(item.title)),
+		Item: h,
+	}
+
+	mi.Size = uint32(unsafe.Sizeof(mi))
+
+	// The return value is the identifier of the specified menu item.
+	// If the menu item identifier is NULL or if the specified item opens a submenu, the return value is -1.
+	res, _, err = pSetMenuItemInfo.Call(
+		uintptr(t.menu),
+		uintptr(item.id),
+		0,
+		uintptr(unsafe.Pointer(&mi)),
+	)
+	if res == 0 {
+		return err
+	}
+
+	return nil*/
+
+	res, _, err = pSetMenuItemBitmaps.Call(
+		uintptr(t.menu),
+		uintptr(item.id),
+		0,
+		uintptr(h),
+		uintptr(h),
+	)
+	if res == 0 {
+		return err
+	}
+	return nil
+
 }
 
 func (t *winTray) addSeparatorMenuItem(menuId int32) error {
@@ -645,6 +864,10 @@ func addOrUpdateMenuItem(item *MenuItem) error {
 	return wt.addOrUpdateMenuItem(item)
 }
 
+func addSubmenuToTray(id, title string, item *MenuItem) error {
+	return wt.addSubmenuToTray(id, title, item)
+}
+
 func addSeparator(id int32) error {
 	return wt.addSeparatorMenuItem(id)
 }
@@ -655,4 +878,8 @@ func hideMenuItem(item *MenuItem) error {
 
 func showMenuItem(item *MenuItem) error {
 	return addOrUpdateMenuItem(item)
+}
+
+func addBitmap(path string, item *MenuItem) error {
+	return wt.addBitMapMenuItem(path, item)
 }

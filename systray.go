@@ -134,6 +134,66 @@ func AddMenuItem(title, tooltip string, flags byte) *MenuItem {
 	return item
 }
 
+// AddSubMenu adds a sub menu to the systray and
+// and returns an id to access to accesss the menu
+func AddSubMenu(title, id string) (*MenuItem, error) {
+	err := createSubMenu(id)
+
+	menuItemsLock.Lock()
+	defer menuItemsLock.Unlock()
+
+	item := &MenuItem{
+		clickedCh: make(chan struct{}),
+		id:        atomic.AddInt32(&idSequence, 1),
+		title:     title,
+	}
+	menuItems[item.id] = item
+	if atomic.LoadInt32(&hasStarted) == 1 {
+		addSubmenuToTray(id, title, item)
+	}
+	return item, err
+}
+
+func AddSubMenuItem(id, title, tooltip string, flags byte) *MenuItem {
+	menuItemsLock.Lock()
+	defer menuItemsLock.Unlock()
+
+	if ItemSeparator&flags != 0 {
+		// remove other flags if separator
+		flags = ItemSeparator
+	} else if ItemCheckable&flags == 0 {
+		// remove "checked" flag if not checkable
+		flags &= ^ItemChecked
+	}
+
+	item := &MenuItem{
+		clickedCh:   make(chan struct{}),
+		id:          atomic.AddInt32(&idSequence, 1),
+		title:       title,
+		tooltip:     tooltip,
+		isSeparator: ItemSeparator&flags != 0,
+		checkable:   ItemCheckable&flags != 0,
+		checked:     ItemChecked&flags != 0,
+		disabled:    ItemDisabled&flags != 0,
+	}
+	menuItems[item.id] = item
+
+	if atomic.LoadInt32(&hasStarted) == 1 {
+		addOrUpdateSubMenuItem(id, item)
+	}
+	return item
+}
+
+func (item *MenuItem) AddBitmap(bitmapPath string) error {
+	menuItemsLock.Lock()
+	defer menuItemsLock.Unlock()
+
+	if atomic.LoadInt32(&hasStarted) == 1 {
+		return addBitmap(bitmapPath, item)
+	}
+	return errors.New("Could not set bitmap on menuitem")
+}
+
 // AddSeparator adds a separator bar to the menu.
 func AddSeparator() *MenuItem {
 	return AddMenuItem("", "", ItemSeparator)
