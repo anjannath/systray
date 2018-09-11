@@ -11,8 +11,8 @@ package systray
 import "C"
 
 import (
-	"unsafe"
 	"io/ioutil"
+	"unsafe"
 )
 
 func nativeLoop() (err error) {
@@ -108,4 +108,20 @@ func systray_on_exit() {
 //export systray_menu_item_selected
 func systray_menu_item_selected(cID C.int) {
 	systrayMenuItemSelected(int32(cID), false, false)
+}
+
+func addBitmap(bitmapByte []byte, item *MenuItem) error {
+	return nil
+}
+
+func addBitmapPath(path string, item *MenuItem) error {
+	return nil
+}
+
+func createSubMenu(subMenuId int32) {
+
+}
+
+func addSubmenuToTray(item *MenuItem) {
+	addOrUpdateMenuItem(item)
 }

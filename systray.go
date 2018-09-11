@@ -52,6 +52,7 @@ type MenuItem struct {
 
 	isSeparator   bool
 	isSubmenuItem bool
+	isSubmenu     bool
 
 	checkable bool
 	checked   bool
@@ -125,6 +126,7 @@ func AddMenuItem(title, tooltip string, flags byte) *MenuItem {
 		title:         title,
 		tooltip:       tooltip,
 		isSubmenuItem: false,
+		isSubmenu:     false,
 		isSeparator:   ItemSeparator&flags != 0,
 		checkable:     ItemCheckable&flags != 0,
 		checked:       ItemChecked&flags != 0,
@@ -150,6 +152,7 @@ func AddSubMenu(title string) *MenuItem {
 		title:         title,
 		menuId:        subMenuId,
 		isSubmenuItem: false,
+		isSubmenu:     true,
 	}
 	if atomic.LoadInt32(&hasStarted) == 1 {
 		addSubmenuToTray(item)
@@ -177,6 +180,7 @@ func (sitem *MenuItem) AddSubMenuItem(title, tooltip string, flags byte) *MenuIt
 		menuId:        sitem.menuId,
 		isSeparator:   ItemSeparator&flags != 0,
 		isSubmenuItem: true,
+		isSubmenu:     false,
 		checkable:     ItemCheckable&flags != 0,
 		checked:       ItemChecked&flags != 0,
 		disabled:      ItemDisabled&flags != 0,

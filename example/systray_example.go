@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/amkulikov/systray"
+	"github.com/anjannath/systray"
 )
 
 var (
@@ -32,7 +32,7 @@ func onReady() {
 		startMenu := submenu.AddSubMenuItem("Start", "", 0)
 		stopMenu := submenu.AddSubMenuItem("Stop", "", 0)
 		iconpath, _ := filepath.Abs("doesnotexist.bmp")
-		submenu.AddBitmap(iconpath)
+		submenu.AddBitmapPath(iconpath)
 		submenus[menuTitle] = submenu
 		submenusToMenuItems[menuTitle] = MenuAction{start: startMenu, stop: stopMenu}
 	}
@@ -50,14 +50,14 @@ func onReady() {
 		go func(iconpath, submenu string, v MenuAction) {
 			for {
 				<-v.start.OnClickCh()
-				submenus[submenu].AddBitmap(iconpath)
+				submenus[submenu].AddBitmapPath(iconpath)
 			}
 		}(iconStart, k, v)
 
 		go func(iconpath, submenu string, v MenuAction) {
 			for {
 				<-v.stop.OnClickCh()
-				submenus[submenu].AddBitmap(iconpath)
+				submenus[submenu].AddBitmapPath(iconpath)
 			}
 		}(iconStop, k, v)
 	}

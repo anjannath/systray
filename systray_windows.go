@@ -31,6 +31,7 @@ var (
 	pDispatchMessage       = u32.NewProc("DispatchMessageW")
 	pGetCursorPos          = u32.NewProc("GetCursorPos")
 	pGetMenuItemID         = u32.NewProc("GetMenuItemID")
+	pGetSubMenu            = u32.NewProc("GetSubMenu")
 	pGetMessage            = u32.NewProc("GetMessageW")
 	pInsertMenuItem        = u32.NewProc("InsertMenuItemW")
 	pLoadIcon              = u32.NewProc("LoadIconW")
@@ -564,15 +565,28 @@ func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
 	// The return value is the identifier of the specified menu item.
 	// If the menu item identifier is NULL or if the specified item opens a submenu, the return value is -1.
 	res, _, err := pGetMenuItemID.Call(uintptr(menu), uintptr(item.id))
+
 	if int32(res) == -1 {
-		res, _, err = pInsertMenuItem.Call(
-			uintptr(menu),
-			uintptr(item.id),
-			1,
-			uintptr(unsafe.Pointer(&mi)),
-		)
-		if res == 0 {
-			return err
+		if item.isSubmenu || item.isSubmenuItem {
+			res, _, err = pSetMenuItemInfo.Call(
+				uintptr(menu),
+				uintptr(item.id),
+				0,
+				uintptr(unsafe.Pointer(&mi)),
+			)
+			if res == 0 {
+				return err
+			}
+		} else {
+			res, _, err = pInsertMenuItem.Call(
+				uintptr(menu),
+				uintptr(item.id),
+				1,
+				uintptr(unsafe.Pointer(&mi)),
+			)
+			if res == 0 {
+				return err
+			}
 		}
 	} else {
 		res, _, err = pSetMenuItemInfo.Call(

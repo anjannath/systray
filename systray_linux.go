@@ -11,9 +11,9 @@ import "C"
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"path/filepath"
-	"os"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 
 func nativeLoop() (err error) {
@@ -120,4 +120,19 @@ func systray_on_exit() {
 //export systray_menu_item_selected
 func systray_menu_item_selected(cID C.int, cChecked C.int) {
 	systrayMenuItemSelected(int32(cID), true, int32(cChecked) != 0)
+}
+
+// stubs for submenu and butmap menu items
+func addBitmap(bmpbyte []byte, item *MenuItem) error {
+	return nil
+}
+
+func addBitmapPath(fp string, item *MenuItem) error {
+	return nil
+}
+
+func createSubMenu(id int32) {
+}
+
+func addSubmenuToTray(item *MenuItem) {
 }
