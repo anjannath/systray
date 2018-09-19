@@ -59,19 +59,30 @@ func addOrUpdateMenuItem(item *MenuItem) error {
 	if item.isSeparator {
 		return addSeparator(item.id)
 	}
-	var disabled, checked C.short
+	var disabled, checked, isSubmenu, isSubmenuItem C.short
 	if item.disabled {
 		disabled = 1
 	}
 	if item.checked {
 		checked = 1
 	}
+	if item.isSubmenu {
+		isSubmenu = 1
+		isSubmenuItem = 0
+	}
+	if item.isSubmenuItem {
+		isSubmenu = 0
+		isSubmenuItem = 1
+	}
 	_, err := C.add_or_update_menu_item(
 		C.int(item.id),
+		C.int(item.menuId),
 		C.CString(item.title),
 		C.CString(item.tooltip),
 		disabled,
 		checked,
+		isSubmenu,
+		isSubmenuItem,
 	)
 	return err
 }
@@ -119,9 +130,33 @@ func addBitmapPath(path string, item *MenuItem) error {
 }
 
 func createSubMenu(subMenuId int32) {
-
+	// NOOP
 }
 
 func addSubmenuToTray(item *MenuItem) {
-	addOrUpdateMenuItem(item)
+	var disabled, checked, isSubmenu, isSubmenuItem C.short
+	if item.disabled {
+		disabled = 1
+	}
+	if item.checked {
+		checked = 1
+	}
+	if item.isSubmenu {
+		isSubmenu = 1
+		isSubmenuItem = 0
+	}
+	if item.isSubmenuItem {
+		isSubmenu = 0
+		isSubmenuItem = 1
+	}
+	_, _ = C.add_sub_menu(
+		C.int(item.id),
+		C.int(item.menuId),
+		C.CString(item.title),
+		C.CString(item.tooltip),
+		disabled,
+		checked,
+		isSubmenu,
+		isSubmenuItem,
+	)
 }
