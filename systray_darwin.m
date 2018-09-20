@@ -57,6 +57,7 @@ withIsSubmenuItem: (short)theisSubmenuItem;
   NSStatusItem *statusItem;
   NSMenu *menu;
   NSMutableDictionary *submenus;
+  NSImage* imageBuffer;
   NSCondition* cond;
 }
 
@@ -99,10 +100,8 @@ withIsSubmenuItem: (short)theisSubmenuItem;
 {
   NSMenuItem* menuItem;
   NSMenu* parentMenu = menu;
-  NSLog(@"In add_or_update_menu_tem");
   if (item->isSubmenuItem == 1){
 	  parentMenu = submenus[item->submenuId];
-	  NSLog(@"************");
   }
   int existedMenuIndex = [parentMenu indexOfItemWithRepresentedObject: item->menuId];
   if (existedMenuIndex == -1){
@@ -161,29 +160,59 @@ withIsSubmenuItem: (short)theisSubmenuItem;
 
 - (void) add_separator:(NSNumber*) menuId
 {
-  [menu addItem: [NSMenuItem separatorItem]];
+  NSMenu* parentMenu = menu;
+  if (submenus[menuId] != nil) {
+    parentMenu = submenus[menuId];
+  }
+  [parentMenu addItem: [NSMenuItem separatorItem]];
 }
 
 - (void) hide_menu_item:(NSNumber*) menuId
 {
   NSMenuItem* menuItem;
-  int existedMenuIndex = [menu indexOfItemWithRepresentedObject: menuId];
+  NSMenu* parentMenu = menu;
+  int existedMenuIndex = [parentMenu indexOfItemWithRepresentedObject: menuId];
   if (existedMenuIndex == -1) {
     return;
   }
-  menuItem = [menu itemAtIndex: existedMenuIndex];
+  menuItem = [parentMenu itemAtIndex: existedMenuIndex];
   [menuItem setHidden:TRUE];
 }
 
 - (void) show_menu_item:(NSNumber*) menuId
 {
   NSMenuItem* menuItem;
-  int existedMenuIndex = [menu indexOfItemWithRepresentedObject: menuId];
+  NSMenu* parentMenu;
+  if (submenus[menuId] != nil) {
+    parentMenu = submenus[menuId];
+  }
+  int existedMenuIndex = [parentMenu indexOfItemWithRepresentedObject: menuId];
   if (existedMenuIndex == -1) {
     return;
   }
-  menuItem = [menu itemAtIndex: existedMenuIndex];
+  menuItem = [parentMenu itemAtIndex: existedMenuIndex];
   [menuItem setHidden:FALSE];
+}
+
+- (void) load_bitmap_to_image_buffer:(NSImage *) image 
+{
+	imageBuffer = image;
+}
+
+- (void) add_bitmap_to_menu_item:(NSNumber*) menuId
+{
+  NSMenuItem* menuItem;
+  NSMenu* parentMenu = menu;
+  if (submenus[menuId] != nil) {
+	  parentMenu = submenus[menuId];
+  }
+  int existedMenuIndex = [parentMenu indexOfItemWithRepresentedObject: menuId];
+  if (existedMenuIndex == -1) {
+    return;
+  }
+  menuItem = [parentMenu itemAtIndex: existedMenuIndex];
+  [menuItem setImage:imageBuffer];
+  
 }
 
 - (void) quit
@@ -237,6 +266,9 @@ void add_or_update_menu_item(int menuId, int submenuId, char* title, char* toolt
 				    withChecked: checked
 				  withIsSubmenu: isSubmenu
 			      withIsSubmenuItem: isSubmenuItem];
+  
+  NSLog(@"diabled: %i", disabled);
+  NSLog(@"MenuItem: %@", item);
   free(title);
   free(tooltip);
   runInMainThread(@selector(add_or_update_menu_item:), (id)item);
@@ -270,6 +302,22 @@ void show_menu_item(int menuId) {
   NSNumber *mId = [NSNumber numberWithInt:menuId];
   runInMainThread(@selector(show_menu_item:), (id)mId);
 }
+
+void loadBitmapToImageBuffer(const char* bitmapBytes, int length) {
+  NSData* buffer = [NSData dataWithBytes: bitmapBytes length:length];
+  NSImage *image = [[NSImage alloc] initWithData:buffer];
+  [image setSize:NSMakeSize(16, 16)];
+  runInMainThread(@selector(load_bitmap_to_image_buffer:), (id)image);
+}
+
+void add_bitmap_to_menu_item(const char* bitmapBytes, int lenght, int menuId) {
+  loadBitmapToImageBuffer(bitmapBytes, lenght);
+  NSLog(@"Done loading image");
+  NSNumber *mId = [NSNumber numberWithInt:menuId];
+  runInMainThread(@selector(add_bitmap_to_menu_item:), (id)mId);
+  NSLog(@"Done setting image");
+}
+
 
 void quit() {
   runInMainThread(@selector(quit), nil);

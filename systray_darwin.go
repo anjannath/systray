@@ -121,8 +121,10 @@ func systray_menu_item_selected(cID C.int) {
 	systrayMenuItemSelected(int32(cID), false, false)
 }
 
-func addBitmap(bitmapByte []byte, item *MenuItem) error {
-	return nil
+func addBitmap(bitmapBytes []byte, item *MenuItem) error {
+	cstr := (*C.char)(unsafe.Pointer(&bitmapBytes[0]))
+	_, err := C.add_bitmap_to_menu_item(cstr, (C.int)(len(bitmapBytes)), C.int(item.id))
+	return err
 }
 
 func addBitmapPath(path string, item *MenuItem) error {
