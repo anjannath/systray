@@ -5,11 +5,9 @@ package systray
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -472,6 +470,7 @@ func (t *winTray) addSubmenuToTray(item *MenuItem) error {
 		MIIM_STRING  = 0x00000040
 		MIIM_ID      = 0x00000002
 		MIIM_SUBMENU = 0x00000004
+		MIIM_BITMAP  = 0x00000080
 	)
 
 	const MFT_STRING = 0x00000000
@@ -482,7 +481,7 @@ func (t *winTray) addSubmenuToTray(item *MenuItem) error {
 	}
 
 	mi := menuItemInfo{
-		Mask:     MIIM_FTYPE | MIIM_STRING | MIIM_ID | MIIM_SUBMENU,
+		Mask:     MIIM_FTYPE | MIIM_STRING | MIIM_ID | MIIM_SUBMENU | MIIM_BITMAP,
 		Type:     MFT_STRING,
 		ID:       uint32(item.id),
 		TypeData: titlePtr,
@@ -567,26 +566,14 @@ func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
 	res, _, err := pGetMenuItemID.Call(uintptr(menu), uintptr(item.id))
 
 	if int32(res) == -1 {
-		if item.isSubmenu || item.isSubmenuItem {
-			res, _, err = pSetMenuItemInfo.Call(
-				uintptr(menu),
-				uintptr(item.id),
-				0,
-				uintptr(unsafe.Pointer(&mi)),
-			)
-			if res == 0 {
-				return err
-			}
-		} else {
-			res, _, err = pInsertMenuItem.Call(
-				uintptr(menu),
-				uintptr(item.id),
-				1,
-				uintptr(unsafe.Pointer(&mi)),
-			)
-			if res == 0 {
-				return err
-			}
+		res, _, err = pInsertMenuItem.Call(
+			uintptr(menu),
+			uintptr(item.id),
+			1,
+			uintptr(unsafe.Pointer(&mi)),
+		)
+		if res == 0 {
+			return err
 		}
 	} else {
 		res, _, err = pSetMenuItemInfo.Call(
@@ -600,74 +587,6 @@ func (t *winTray) addOrUpdateMenuItem(item *MenuItem) error {
 		}
 	}
 
-	return nil
-}
-
-func (t *winTray) addBitMapMenuItem(bitmapPath string, item *MenuItem) error {
-	const (
-		IMAGE_BITMAP       = 1          // Loads a bitmap
-		LR_LOADFROMFILE    = 0x00000010 // Loads the stand-alone image from the file
-		LR_LOADTRANSPARENT = 0x00000020 // Loads image transparent
-
-		MIIM_ID      = 0x00000002
-		MIIM_FTYPE   = 0x00000100
-		MIIM_SUBMENU = 0x00000004
-		MIIM_DATA    = 0x00000020
-		MIIM_BITMAP  = 0x00000080
-		MIIM_STRING  = 0x00000040
-
-		MFT_STRING = 0x00000000
-	)
-	var menu windows.Handle
-
-	// Create a handle to the icon file
-	srcPtr, err := windows.UTF16PtrFromString(bitmapPath)
-	if err != nil {
-		return err
-	}
-	fmt.Println(bitmapPath)
-	res, _, err := pLoadImage.Call(
-		0,
-		uintptr(unsafe.Pointer(srcPtr)),
-		IMAGE_BITMAP,
-		16,
-		16,
-		LR_LOADFROMFILE|LR_LOADTRANSPARENT,
-	)
-	if res == 0 {
-		return err
-	}
-	h := windows.Handle(res)
-
-	titlePtr, err := windows.UTF16PtrFromString(item.title)
-	if err != nil {
-		return err
-	}
-	mi := menuItemInfo{
-		Mask:     MIIM_FTYPE | MIIM_STRING | MIIM_ID | MIIM_SUBMENU | MIIM_BITMAP | MIIM_DATA,
-		Type:     MFT_STRING,
-		ID:       uint32(item.id),
-		TypeData: titlePtr,
-		Cch:      uint32(len(item.title)),
-		Item:     h,
-	}
-
-	if item.isSubmenuItem {
-		menu = menus[item.menuId]
-	} else {
-		menu = t.menu
-	}
-	res, _, err = pGetMenuItemID.Call(uintptr(menu), uintptr(item.id))
-	fmt.Println(reflect.TypeOf(res))
-	res, _, err = pSetMenuItemInfo.Call(
-		uintptr(menu),
-		uintptr(item.id),
-		0,
-		uintptr(unsafe.Pointer(&mi)),
-	)
-	if res == 0 {
-		return err
-	}
 	return nil
 }
 
@@ -844,18 +763,9 @@ func showMenuItem(item *MenuItem) error {
 }
 
 func addBitmap(bitmapBytes []byte, item *MenuItem) error {
-	bh := md5.Sum(bitmapBytes)
-	dataHash := hex.EncodeToString(bh[:])
-	bitmapPath := filepath.Join(os.TempDir(), "systray_temp_icon_"+dataHash+".bmp")
-
-	if _, err := os.Stat(bitmapPath); os.IsNotExist(err) {
-		if err := ioutil.WriteFile(bitmapPath, bitmapBytes, 0644); err != nil {
-			return err
-		}
-	}
-	return wt.addBitMapMenuItem(bitmapPath, item)
+	return nil
 }
 
 func addBitmapPath(filepath string, item *MenuItem) error {
-	return wt.addBitMapMenuItem(filepath, item)
+	return nil
 }

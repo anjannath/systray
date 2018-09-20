@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/anjannath/systray"
+	"github.com/anjannath/systray/example/icon"
 )
 
 var (
@@ -23,16 +24,19 @@ type MenuAction struct {
 }
 
 func onReady() {
-	iconpath, _ := filepath.Abs("minishift.ico")
-	systray.SetIconPath(iconpath)
+	bp, _ := filepath.Abs("running.bmp")
+	systray.SetIcon(icon.Data)
 	exit := systray.AddMenuItem("Exit", "", 0)
+	m1 := systray.AddSubMenu("Test..")
+	sm2 := m1.AddSubMenuItem("Second Item", "", 0)
+	sm2.AddBitmapPath(bp)
+	exit.AddBitmapPath(bp)
 	systray.AddSeparator()
 	for _, menuTitle := range menuTitles {
 		submenu := systray.AddSubMenu(menuTitle)
 		startMenu := submenu.AddSubMenuItem("Start", "", 0)
 		stopMenu := submenu.AddSubMenuItem("Stop", "", 0)
-		iconpath, _ := filepath.Abs("doesnotexist.bmp")
-		submenu.AddBitmapPath(iconpath)
+		submenu.AddBitmap(icon.Data)
 		submenus[menuTitle] = submenu
 		submenusToMenuItems[menuTitle] = MenuAction{start: startMenu, stop: stopMenu}
 	}
@@ -50,6 +54,7 @@ func onReady() {
 		go func(iconpath, submenu string, v MenuAction) {
 			for {
 				<-v.start.OnClickCh()
+				v.start.Disable()
 				submenus[submenu].AddBitmapPath(iconpath)
 			}
 		}(iconStart, k, v)
@@ -57,6 +62,8 @@ func onReady() {
 		go func(iconpath, submenu string, v MenuAction) {
 			for {
 				<-v.stop.OnClickCh()
+				v.stop.Disable()
+				v.start.Enable()
 				submenus[submenu].AddBitmapPath(iconpath)
 			}
 		}(iconStop, k, v)
